@@ -1,8 +1,8 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 #[macro_use] extern crate rocket;
 
-use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::{Arc};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rocket::response::NamedFile;
@@ -12,17 +12,18 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::Filter;
 use warp::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use rocket::{Response, response, State};
+use rocket::{Data, Response, State};
+use rocket::data::FromDataSimple;
 use rocket::http::Status;
 use tokio::runtime::Runtime;
 use serde::{Serialize, Deserialize};
 
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(0);
-static GLOBAL_RUNTIME: RefCell<Option<Runtime>> = RefCell::new(None);
 
 struct AppState {
-    users: Users
+    users: Users,
+    runtime: Runtime
 }
 
 #[get("/")]
@@ -38,11 +39,14 @@ struct GUIData {
 }
 
 #[put("/send", data="<input>")]
-fn send(state: State<AppState>, input: String) -> Response {
-    let data = serde_json::from_str(&input).and_then(|d: GUIData| serde_json::to_string(&d));
+fn send(state: State<AppState>, input: Data) -> Response {
+    let mut input_string = String::new();
+    input.open().read_to_string(&mut input_string).unwrap();
+    let data = serde_json::from_str(&input_string).and_then(|d: GUIData| serde_json::to_string(&d));
     if let Ok(data) = data {
+        #[cfg(debug_assertions)]
         println!("Recieved data, forwarding");
-        GLOBAL_RUNTIME.borrow().unwrap().spawn(user_message(data, state.users.clone()));
+        state.runtime.spawn(user_message(data, state.users.clone()));
         let mut response = Response::new();
         response.set_status(Status::Ok);
         response
@@ -57,7 +61,6 @@ fn send(state: State<AppState>, input: String) -> Response {
 
 #[tokio::main]
 async fn main() {
-    *GLOBAL_RUNTIME.borrow_mut().unwrap() = Runtime::new().unwrap();
     let users = Users::default();
     let users_clone = users.clone();
     let users_warp = warp::any().map(move || users_clone.clone());
@@ -77,7 +80,7 @@ async fn main() {
     rocket::ignite()
         .mount("/", routes![root, send])
         .mount("/static", StaticFiles::from("web/static"))
-        .manage(AppState { users: users.clone() })
+        .manage(AppState { users: users.clone(), runtime: Runtime::new().unwrap() })
         .launch();
 }
 
@@ -130,6 +133,7 @@ async fn user_connected(ws: WebSocket, users: Users) {
 async fn user_message(msg: String, users: Users) {
     // New message from this user, send it to everyone else (except same uid)...
     for (&uid, tx) in users.read().await.iter() {
+        #[cfg(debug_assertions)]
         println!("Sending data to user: {}", uid);
         if let Err(_disconnected) = tx.send(Message::text(msg.clone())) {
             // The tx is disconnected, our `user_disconnected` code

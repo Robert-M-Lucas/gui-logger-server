@@ -1,0 +1,6 @@
+.tree-container {
+    border-left-color: gray;
+    border-left-width: 1px;
+    border-left-style: dashed;
+    margin-bottom: 2rem;
+}
