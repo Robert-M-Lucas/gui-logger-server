@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use rocket_contrib::serve::StaticFiles;
 use rocket::response::NamedFile;
 use std::io::Read;
+use std::thread;
+use std::time::Duration;
 use crate::{Users, websocket};
 
 struct AppState {
@@ -13,11 +15,19 @@ struct AppState {
     socket_port: u16
 }
 
-pub fn run_webserver_blocking(users: Users, port: u16, socket_port: u16) {
+pub fn run_webserver_blocking(users: Users, port: u16, socket_port: u16, open_browser: bool) {
     let cfg = rocket::config::Config::build(rocket::config::Environment::Production)
         .address("0.0.0.0")
         .port(port)
         .unwrap();
+
+    if open_browser {
+        let port_clone = port.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(1000));
+            open::that(format!("http://0.0.0.0:{}", port_clone)).ok();
+        });
+    }
 
     rocket::custom(cfg)
         .mount("/", routes![root, send, port])

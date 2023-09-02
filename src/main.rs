@@ -41,5 +41,5 @@ pub async fn main() {
 
     websocket::run_websocket(users.clone(), socket_port).await;
 
-    webserver::run_webserver_blocking(users, web_port, socket_port);
+    webserver::run_webserver_blocking(users, web_port, socket_port, true);
 }

@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 futures-util = "0.3.28"
+open = "5.0.0"
 rocket = "0.4.11"
 rocket_contrib = "0.4.11"
 serde = { version = "1.0.188", features = ["derive"] }

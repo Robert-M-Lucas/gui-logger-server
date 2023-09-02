@@ -150,6 +150,6 @@ xmlHttp.onreadystatechange = function() {
         show_error("Fetching web socket port failed - reload page to retry");
     }
 }
-xmlHttp.open("GET", "http://0.0.0.0:8000/port", true); // true for asynchronous
+xmlHttp.open("GET", "/port", true); // true for asynchronous
 xmlHttp.send(null);
 
